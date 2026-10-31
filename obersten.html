@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="no" class="h-full scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obersten: I tid og rom | Sydpolens Lederhund</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet OpenStreetMap CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        polar: {
+                            50: '#f0f8ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            500: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                            950: '#082f49',
+                        },
+                        ice: '#f8fafc',
+                        snow: '#ffffff',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        serif: ['Georgia', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        #map {
+            z-index: 10;
+        }
+        .leaflet-popup-content-wrapper {
+            border-radius: 0.75rem;
+            padding: 0.25rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans h-full flex flex-col antialiased">
+
+    <!-- Navigasjon i toppen -->
+    <header class="bg-slate-950/90 border-b border-slate-800 backdrop-blur sticky top-0 z-50 transition-all">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="resetFilters()">
+                <div class="w-10 h-10 rounded-full bg-polar-700 flex items-center justify-center text-white font-bold text-xl shadow-md border border-polar-400">
+                    <i class="fa-solid font-paw fa-dog"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-wide text-white">Obersten</h1>
+                    <p class="text-xs text-polar-200">I tid og rom • Sydpolens Lederhund</p>
+                </div>
+            </div>
+
+            <!-- Fremskritt og status -->
+            <div class="hidden sm:flex items-center space-x-4">
+                <div class="text-right">
+                    <div class="text-xs text-slate-400">Besøkte steder</div>
+                    <div class="text-sm font-semibold text-polar-200" id="visited-counter">0 av 6 utforsket</div>
+                </div>
+                <div class="w-24 bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700">
+                    <div id="visited-progress" class="bg-polar-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hovedinnhold -->
+    <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto p-4 gap-4 overflow-hidden">
+        
+        <!-- Hero og Introduksjon -->
+        <section class="bg-gradient-to-r from-slate-900 via-polar-950 to-slate-900 rounded-2xl p-5 border border-polar-900 shadow-xl relative overflow-hidden shrink-0">
+            <div class="absolute -right-10 -bottom-10 opacity-10 text-polar-200 text-9xl pointer-events-none">
+                <i class="fa-solid fa-compass"></i>
+            </div>
+            <div class="max-w-3xl relative z-10">
+                <span class="inline-block px-2.5 py-1 bg-polar-900/80 text-polar-200 text-xs font-semibold rounded-full border border-polar-700 mb-2">
+                    <i class="fa-solid fa-snowflake mr-1"></i> Historisk Ekspedisjon 1910–1919
+                </span>
+                <h2 class="text-xl sm:text-2xl font-bold text-white mb-2">Følg Roald Amundsens ledethund i Oslo og omegn</h2>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    Følg grønlandshunden <strong class="text-white">Obersten</strong>, den fryktløse ledarhunden som førte Roald Amundsens hundespann til Sydpolen i 1911. Utforsk historiske steder i Kristiania og Østlandet, fra avreisen i hamnen til hans siste år i Horten og museumsutstillingen i dag.
+                </p>
+            </div>
+        </section>
+
+        <!-- Tidslinjefilter -->
+        <section class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 shrink-0 shadow-md">
+            <div class="flex items-center justify-between mb-2 px-1">
+                <span class="text-xs font-semibold uppercase tracking-wider text-polar-300 flex items-center gap-1.5">
+                    <i class="fa-solid fa-clock-rotate-left text-polar-400"></i> Filtrer etter tidsperiode
+                </span>
+                <button onclick="resetFilters()" class="text-xs text-slate-400 hover:text-polar-200 transition underline">
+                    Vis alle epoker
+                </button>
+            </div>
+            <div class="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar text-sm" id="timeline-buttons">
+                <!-- Tidslinjeknapper genereres dynamisk med JS -->
+            </div>
+        </section>
+
+        <!-- Kart og liste over steder -->
+        <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
+            
+            <!-- Venstre side: Interaktivt kart (7 kolonner) -->
+            <div class="lg:col-span-7 bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden flex flex-col shadow-xl min-h-[350px] lg:min-h-0">
+                <div class="p-3 bg-slate-900/90 border-b border-slate-800 flex justify-between items-center text-xs text-slate-300">
+                    <span class="font-medium flex items-center gap-2">
+                        <i class="fa-solid fa-map-location-dot text-polar-400"></i> Interaktivt kart
+                    </span>
+                    <span id="map-site-count" class="text-slate-400">Viser 6 steder</span>
+                </div>
+                <div id="map" class="w-full flex-1"></div>
+            </div>
+
+            <!-- Høyre side: Kortvisning av steder (5 kolonner) -->
+            <div class="lg:col-span-5 bg-slate-950 border border-slate-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-[400px] lg:min-h-0">
+                <div class="p-3 bg-slate-900/90 border-b border-slate-800 flex justify-between items-center text-xs text-slate-300">
+                    <span class="font-medium flex items-center gap-2">
+                        <i class="fa-solid fa-list-ul text-polar-400"></i> Sentrale steder
+                    </span>
+                    <span class="text-slate-400">Klikk for detaljer</span>
+                </div>
+                
+                <!-- Rullbar liste over steder -->
+                <div id="cards-container" class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+                    <!-- Kort rendres dynamisk med JS -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Detaljvisning / Modal -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-300 flex items-center justify-center p-4">
+        <div id="modal-card" class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl custom-scrollbar flex flex-col transform scale-95 transition-transform duration-300">
+            
+            <!-- Overskrift i Modal -->
+            <div class="p-5 border-b border-slate-800 bg-slate-950 flex justify-between items-start sticky top-0 z-20">
+                <div>
+                    <span id="modal-period" class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-polar-900/80 text-polar-300 border border-polar-700 mb-2">
+                        1911
+                    </span>
+                    <h3 id="modal-title" class="text-2xl font-bold text-white leading-snug">Stedsnavn</h3>
+                    <p id="modal-address" class="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
+                        <i class="fa-solid fa-location-dot text-red-400"></i> Adresse
+                    </p>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white p-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Innhold i Modal -->
+            <div class="p-6 space-y-6">
+                <!-- Bilde eller illustrasjon -->
+                <div id="modal-image-container" class="relative h-48 sm:h-56 rounded-xl overflow-hidden bg-slate-800 border border-slate-700 shadow-inner">
+                    <img id="modal-image" src="" alt="Stedsbilde" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent flex items-end p-4">
+                        <span id="modal-image-caption" class="text-xs text-slate-300 italic">Kilde: Norsk Polarinstitutt</span>
+                    </div>
+                </div>
+
+                <!-- Seksjon: Oberstens tilknytning -->
+                <div class="bg-polar-950/50 border border-polar-900/80 rounded-xl p-4">
+                    <h4 class="text-sm font-semibold text-polar-300 flex items-center gap-2 mb-2">
+                        <i class="fa-solid fa-paw text-polar-400"></i> Oberstens tilknytning
+                    </h4>
+                    <p id="modal-connection" class="text-sm text-slate-200 leading-relaxed"></p>
+                </div>
+
+                <!-- Seksjon: Historisk kontekst / Livet i Kristiania (~1911) -->
+                <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4">
+                    <h4 class="text-sm font-semibold text-amber-400/90 flex items-center gap-2 mb-2">
+                        <i class="fa-solid fa-landmark text-amber-400/90"></i> Livet i Kristiania og Norge (~1911)
+                    </h4>
+                    <p id="modal-context" class="text-sm text-slate-300 leading-relaxed"></p>
+                </div>
+
+                <!-- Seksjon: Besøksinfo og opplevelse -->
+                <div class="bg-emerald-950/30 border border-emerald-900/50 rounded-xl p-4">
+                    <h4 class="text-sm font-semibold text-emerald-400 flex items-center gap-2 mb-2">
+                        <i class="fa-solid fa-compass text-emerald-400"></i> Beste besøksopplevelse
+                    </h4>
+                    <p id="modal-experience" class="text-sm text-slate-300 leading-relaxed"></p>
+                </div>
+            </div>
+
+            <!-- Knapper i Modal -->
+            <div class="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between sticky bottom-0">
+                <button id="modal-toggle-visited" onclick="toggleVisitedFromModal()" class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition border">
+                    <i class="fa-solid fa-check"></i> Marker som besøkt
+                </button>
+                <button onclick="closeModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition">
+                    Lukk
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Datagrunnlag og skripter -->
+    <script>
+        // Database over de 6 nøkkelstedene knyttet til Obersten
+        const sitesData = [
+            {
+                id: "skimuseet",
+                name: "Holmenkollen Skimuseum",
+                location: "Holmenkollen, Oslo",
+                address: "Kongeveien 5, 0787 Oslo",
+                coords: [59.9639, 10.6672],
+                periodKey: "1923-present",
+                periodLabel: "1923 – I dag",
+                tagline: "Oberstens bevarte pels og museumsutstilling",
+                connection: "Det er her du kan se Obersten personlig! Etter hans død rundt 1919–1920 ble pelsen hans bevart og montert. Han står i dag utstilt i museet ved siden av Amundsens originale Sydpol-telt, kjelker og polutstyr.",
+                context: "Skimuseet viser tidlig norsk skikultur og illustrerer hvordan vintersport og polareksspedisjoner var vevd sammen med den nasjonale identiteten i Kristiania på begynnelsen av 1900-tallet.",
+                experience: "Se den originale utstoppede ledarhunden på nært hold sammen med utstyret fra Sydpolen.",
+                image: "https://images.unsplash.com/photo-1548777123-e216912df7d8?auto=format&fit=crop&w=800&q=80",
+                icon: "fa-award"
+            },
+            {
+                id: "uranienborg",
+                name: "Uranienborg (Roald Amundsens hjem)",
+                location: "Svartskog (Nordre Follo)",
+                address: "Uranienborgveien 9, 1420 Svartskog",
+                coords: [59.7836, 10.7303],
+                periodKey: "1912-1914",
+                periodLabel: "1912 – 1914",
+                tagline: "Oberstens hjem etter Sydpolen",
+                connection: "Amundsens hjem fungerte som Oberstens primære bosted da han kom tilbake til Norge i 1913. Obersten bodde i hagen sammen med Rex (Amundsens Sct. Bernhardshund) og andre ekspedisjonshunder. I 1913 deltok han på et lokalt hundeshow hvor han vant 1. premie i åpen klasse.",
+                context: "Siden eiendommen er bevart intakt fra 1928, viser Uranienborg hvordan Norges internasjonale helter bodde utenfor bykjernen og var avhengige av dampbåter på fjorden og hest og vogn for å komme inn til Kristiania.",
+                experience: "Omvisning på eiendommen, den historiske hagen og originale gjenstander.",
+                image: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&w=800&q=80",
+                icon: "fa-house-chimney"
+            },
+            {
+                id: "frammuseet",
+                name: "Frammuseet",
+                location: "Bygdøy, Oslo",
+                address: "Bygdøynesveien 36, 0286 Oslo",
+                coords: [59.9033, 10.6996],
+                periodKey: "1910",
+                periodLabel: "1910 & 1914",
+                tagline: "Polarskipet som fraktet Obersten",
+                connection: "Obersten gikk om bord på polarskipet Fram i 1910 som en av rundt 100 grønlandshunder valgt ut for ekspedisjonen. Han overlevde den krevende Antarktis-ferden over Ross-barrieren og var en av bare 11 hunder som vendte trygt tilbake til Sør-Amerika om bord på Fram.",
+                context: "Belyser Kristianias maritime arv, polarambisjoner og ingeniørkunst i det tidlige 1900-tallets norske skipsbygging.",
+                experience: "Gå på dekk på det originale polarskipet Fram og utforsk utstillingene om polarhundene.",
+                image: "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=800&q=80",
+                icon: "fa-ship"
+            },
+            {
+                id: "pipervika",
+                name: "Pipervika / Christiania havn",
+                location: "Aker Brygge / Rådhusbrygge, Oslo",
+                address: "Rådhusbrygge 2, 0160 Oslo",
+                coords: [59.9111, 10.7322],
+                periodKey: "1910",
+                periodLabel: "Juni 1910",
+                tagline: "Avreisesedet for Fram-ekspedisjonen",
+                connection: "Havnstrøket hvor Fram ble lastet med forsyninger, tømmer, utstyr og hunder før avreisen til Sydpolen. Dette var Oberstens avreisested fra Norge før ferden mot Antarktis.",
+                context: "I 1910 var Pipervika en travell industrihamn og tømmerplass omgitt av arbeiderstrøk – en markant kontrast til dagens moderne havnepromenade.",
+                experience: "Historisk vandring langs havnepromenaden med utsyn over Oslofjorden.",
+                image: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=800&q=80",
+                icon: "fa-anchor"
+            },
+            {
+                id: "videnskapsakademi",
+                name: "Det Norske Videnskaps-Akademi",
+                location: "Frogner, Oslo",
+                address: "Drammensveien 78, 0271 Oslo",
+                coords: [59.9142, 10.7128],
+                periodKey: "1912-1914",
+                periodLabel: "1912 – 1914",
+                tagline: "Presentasjon av polareksspedisjonen",
+                connection: "Etter Amundsens hjemkomst ble resultatene fra ekspedisjonen og grønlandshundenes innsats lagt fram for vitenskapelige miljøer i Kristiania. Fotografier og dagbøker som dokumenterte Oberstens lederegenskaper ble arkivert her.",
+                context: "Viser den borgerlige og akademiske siden ved Frogner i Kristiania tidlig på 1900-tallet, der offentlige foredrag om geografiske oppdagelser var store begivenheter.",
+                experience: "Arkitektonisk og historisk vandring i vakre Frogner.",
+                image: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=800&q=80",
+                icon: "fa-building-columns"
+            },
+            {
+                id: "wisting_horten",
+                name: "Oscar Wistings hjem & Monument",
+                location: "Horten (Vestfold)",
+                address: "Storgata 37, 3182 Horten",
+                coords: [59.4162, 10.4851],
+                periodKey: "1914-1919",
+                periodLabel: "1914 – 1919",
+                tagline: "Oberstens siste år sammen med Wisting",
+                connection: "Sommeren 1914 flyttet Obersten til Horten for å bo fast hos Oscar Wisting – marinemannen som hadde kjørt hundespannet hans over Antarktis. Obersten ble en kjær lokalfigur i Horten frem til sin død rundt 1919–1920. Utenfor Kulturhuset står i dag en bronsestatue av Wisting side om side med Obersten.",
+                context: "Horten var Norges viktigste marinebase (Karljohansvern) på begynnelsen av 1900-tallet. Et besøk gir innsikt i hvordan polarhelter og deres hunder vendte tilbake til hverdagen i kystbyene langs Oslofjorden.",
+                experience: "Besøk bronsestatuen av Wisting & Obersten og opplev Hortens maritime historie.",
+                image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
+                icon: "fa-dog"
+            }
+        ];
+
+        // Tidslinjealternativer
+        const periods = [
+            { key: "all", label: "Alle epoker" },
+            { key: "1910", label: "1910 Avreise" },
+            { key: "1912-1914", label: "1912-1914 Hjemkomst" },
+            { key: "1914-1919", label: "1914-1919 Horten" },
+            { key: "1923-present", label: "1923-I dag Minnet" }
+        ];
+
+        // Tilstandshåndtering
+        let activePeriod = "all";
+        let activeSiteId = null;
+        let visitedSites = JSON.parse(localStorage.getItem('obersten_visited') || '[]');
+        let map, markers = {};
+
+        // Oppstart av applikasjonen
+        window.onload = function() {
+            initMap();
+            renderTimelineButtons();
+            renderCards();
+            updateVisitedStats();
+        };
+
+        // Initialiserer Leaflet-kartet
+        function initMap() {
+            map = L.map('map', {
+                zoomControl: true,
+                scrollWheelZoom: true
+            }).setView([59.85, 10.65], 9);
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> bidragsytere &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 18
+            }).addTo(map);
+
+            renderMarkers();
+        }
+
+        // Rendrer kartmarkører basert på aktivt filter
+        function renderMarkers() {
+            Object.values(markers).forEach(m => map.removeLayer(m));
+            markers = {};
+
+            const filteredSites = getFilteredSites();
+            const bounds = [];
+
+            filteredSites.forEach(site => {
+                const isVisited = visitedSites.includes(site.id);
+                
+                const iconHtml = `
+                    <div class="relative flex items-center justify-center w-8 h-8 rounded-full shadow-lg border-2 ${isVisited ? 'bg-emerald-600 border-emerald-300 text-white' : 'bg-polar-800 border-polar-300 text-polar-100'} hover:scale-110 transition-transform cursor-pointer">
+                        <i class="fa-solid ${site.icon} text-xs"></i>
+                    </div>
+                `;
+
+                const customIcon = L.divIcon({
+                    html: iconHtml,
+                    className: 'custom-map-icon',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                });
+
+                const marker = L.marker(site.coords, { icon: customIcon }).addTo(map);
+                
+                marker.bindPopup(`
+                    <div class="p-1 font-sans">
+                        <div class="text-xs font-bold text-polar-900">${site.name}</div>
+                        <div class="text-[10px] text-slate-600 mb-1">${site.location}</div>
+                        <button onclick="openModal('${site.id}')" class="mt-1 px-2 py-1 bg-polar-700 text-white rounded text-[11px] font-medium hover:bg-polar-800 w-full">
+                            Les mer & historie
+                        </button>
+                    </div>
+                `);
+
+                marker.on('click', () => {
+                    highlightCard(site.id);
+                });
+
+                markers[site.id] = marker;
+                bounds.push(site.coords);
+            });
+
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 });
+            }
+
+            document.getElementById('map-site-count').innerText = `Viser ${filteredSites.length} av ${sitesData.length} steder`;
+        }
+
+        // Filtreringslogikk
+        function getFilteredSites() {
+            if (activePeriod === "all") return sitesData;
+            return sitesData.filter(site => site.periodKey === activePeriod);
+        }
+
+        // Rendrer tidslinjeknappene
+        function renderTimelineButtons() {
+            const container = document.getElementById('timeline-buttons');
+            container.innerHTML = '';
+
+            periods.forEach(p => {
+                const isActive = activePeriod === p.key;
+                const btn = document.createElement('button');
+                btn.className = `px-3 py-1.5 rounded-lg whitespace-nowrap text-xs font-semibold transition border ${
+                    isActive 
+                    ? 'bg-polar-700 text-white border-polar-400 shadow-md' 
+                    : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white'
+                }`;
+                btn.innerText = p.label;
+                btn.onclick = () => {
+                    activePeriod = p.key;
+                    renderTimelineButtons();
+                    renderCards();
+                    renderMarkers();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        // Rendrer listen over steder
+        function renderCards() {
+            const container = document.getElementById('cards-container');
+            const filtered = getFilteredSites();
+            container.innerHTML = '';
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="p-8 text-center text-slate-500 text-sm">
+                        <i class="fa-solid fa-compass-slash text-2xl mb-2">
+                        </i><br>Ingen steder funnet for denne tidsperioden.
+                    </div>`;
+                return;
+            }
+
+            filtered.forEach(site => {
+                const isVisited = visitedSites.includes(site.id);
+
+                const card = document.createElement('div');
+                card.id = `card-${site.id}`;
+                card.className = `p-4 rounded-xl border transition-all duration-200 cursor-pointer flex gap-3 relative ${
+                    isVisited 
+                    ? 'bg-emerald-950/20 border-emerald-900/50 hover:border-emerald-700' 
+                    : 'bg-slate-900/80 border-slate-800 hover:border-polar-600/60 hover:bg-slate-900'
+                }`;
+
+                card.onclick = (e) => {
+                    if (e.target.closest('.visited-toggle-btn')) return;
+                    openModal(site.id);
+                };
+
+                card.innerHTML = `
+                    <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-polar-400 mt-1">
+                        <i class="fa-solid ${site.icon} text-lg"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-polar-300 px-2 py-0.5 rounded bg-polar-950 border border-polar-800">
+                                ${site.periodLabel}
+                            </span>
+                            <button onclick="toggleVisited('${site.id}')" class="visited-toggle-btn text-xs px-2 py-1 rounded-md border flex items-center gap-1 transition ${
+                                isVisited 
+                                ? 'bg-emerald-800/40 text-emerald-300 border-emerald-600' 
+                                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                            }">
+                                <i class="fa-solid ${isVisited ? 'fa-check-circle' : 'fa-circle'}"></i>
+                                ${isVisited ? 'Besøkt' : 'Ikke besøkt'}
+                            </button>
+                        </div>
+                        <h4 class="font-bold text-white text-base mt-1 truncate">${site.name}</h4>
+                        <p class="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                            <i class="fa-solid fa-location-dot text-polar-500"></i> ${site.location}
+                        </p>
+                        <p class="text-xs text-slate-300 mt-2 line-clamp-2 leading-relaxed">
+                            ${site.tagline}
+                        </p>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        // Fokusér kartet på valgt sted
+        function highlightCard(siteId) {
+            const site = sitesData.find(s => s.id === siteId);
+            if (site) {
+                map.flyTo(site.coords, 12, { duration: 1 });
+            }
+        }
+
+        // Modallogikk
+        function openModal(siteId) {
+            const site = sitesData.find(s => s.id === siteId);
+            if (!site) return;
+
+            activeSiteId = siteId;
+
+            document.getElementById('modal-title').innerText = site.name;
+            document.getElementById('modal-period').innerText = site.periodLabel;
+            document.getElementById('modal-address').innerHTML = `<i class="fa-solid fa-location-dot text-red-400"></i> ${site.address}`;
+            document.getElementById('modal-connection').innerText = site.connection;
+            document.getElementById('modal-context').innerText = site.context;
+            document.getElementById('modal-experience').innerText = site.experience;
+            document.getElementById('modal-image').src = site.image;
+            document.getElementById('modal-image-caption').innerText = `${site.name} — Oberstens historie`;
+
+            updateModalVisitedBtn();
+
+            const backdrop = document.getElementById('modal-backdrop');
+            const card = document.getElementById('modal-card');
+
+            backdrop.classList.remove('hidden');
+            setTimeout(() => {
+                backdrop.classList.remove('opacity-0');
+                card.classList.remove('scale-95');
+                card.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const backdrop = document.getElementById('modal-backdrop');
+            const card = document.getElementById('modal-card');
+
+            backdrop.classList.add('opacity-0');
+            card.classList.remove('scale-100');
+            card.classList.add('scale-95');
+
+            setTimeout(() => {
+                backdrop.classList.add('hidden');
+            }, 300);
+        }
+
+        // Håndtering av sjekkliste / «Besøkt»-status
+        function toggleVisited(siteId) {
+            if (visitedSites.includes(siteId)) {
+                visitedSites = visitedSites.filter(id => id !== siteId);
+            } else {
+                visitedSites.push(siteId);
+            }
+            localStorage.setItem('obersten_visited', JSON.stringify(visitedSites));
+            
+            updateVisitedStats();
+            renderCards();
+            renderMarkers();
+
+            if (activeSiteId === siteId) {
+                updateModalVisitedBtn();
+            }
+        }
+
+        function toggleVisitedFromModal() {
+            if (activeSiteId) {
+                toggleVisited(activeSiteId);
+            }
+        }
+
+        function updateModalVisitedBtn() {
+            const btn = document.getElementById('modal-toggle-visited');
+            const isVisited = visitedSites.includes(activeSiteId);
+
+            if (isVisited) {
+                btn.className = "px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition bg-emerald-700 text-white border-emerald-500 shadow-md";
+                btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Besøkt (Klikk for å angre)`;
+            } else {
+                btn.className = "px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white";
+                btn.innerHTML = `<i class="fa-regular fa-circle"></i> Marker som besøkt`;
+            }
+        }
+
+        function updateVisitedStats() {
+            const count = visitedSites.length;
+            const total = sitesData.length;
+            const percentage = Math.round((count / total) * 100);
+
+            document.getElementById('visited-counter').innerText = `${count} av ${total} utforsket`;
+            document.getElementById('visited-progress').style.width = `${percentage}%`;
+        }
+
+        function resetFilters() {
+            activePeriod = "all";
+            renderTimelineButtons();
+            renderCards();
+            renderMarkers();
+        }
+    </script>
+</body>
+</html>
